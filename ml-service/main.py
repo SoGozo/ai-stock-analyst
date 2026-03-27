@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import prediction, sentiment, health
+from api.routes import prediction, sentiment, health, fundamentals, indicators, news
 
 app = FastAPI(
     title="AI Stock Analyst — ML Service",
-    description="LSTM price prediction + FinBERT sentiment analysis",
-    version="1.0.0",
+    description="LSTM prediction · FinBERT sentiment · Technical indicators · Fundamentals",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -16,10 +16,25 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(fundamentals.router)
+app.include_router(indicators.router)
+app.include_router(news.router)
 app.include_router(prediction.router)
 app.include_router(sentiment.router)
 
 
 @app.get("/")
 async def root():
-    return {"service": "ml-service", "docs": "/docs"}
+    return {
+        "service": "ml-service",
+        "version": "2.0.0",
+        "docs": "/docs",
+        "endpoints": [
+            "GET  /health",
+            "GET  /fundamentals/{ticker}",
+            "GET  /indicators/{ticker}?source=local|alphavantage",
+            "GET  /news/{ticker}?analyze=true",
+            "GET  /predict/{ticker}?days=30",
+            "POST /sentiment/{ticker}",
+        ],
+    }
