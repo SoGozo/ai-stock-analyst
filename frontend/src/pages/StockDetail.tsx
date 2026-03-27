@@ -1,208 +1,447 @@
-import { useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { stockApi } from "../api/stock.api";
-import { StockHeader } from "../components/stock/StockHeader";
-import { FundamentalCard } from "../components/stock/FundamentalCard";
+import {
+  useQuote, useFundamentals, useHistory,
+  usePrediction, useSentiment, useNews,
+} from "../hooks/useStockData";
+import { useTickerStore } from "../store/tickerStore";
 import { CandlestickChart } from "../components/charts/CandlestickChart";
 import { PredictionChart } from "../components/charts/PredictionChart";
-import { SentimentGauge } from "../components/charts/SentimentGauge";
-import { NewsCard } from "../components/stock/NewsCard";
-import { Skeleton } from "../components/ui/Skeleton";
+import { formatDistanceToNow } from "date-fns";
 
 const RANGES = ["1m", "3m", "6m", "1y", "2y"] as const;
 
-export function StockDetail() {
-  const { ticker = "" } = useParams<{ ticker: string }>();
-  const [range, setRange] = useState<string>("1y");
-  const [activeTab, setActiveTab] = useState<"candlestick" | "prediction">("candlestick");
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const C = {
+  bg: "#f5f5f5",
+  card: "#fff",
+  border: "1px solid #e8e8e8",
+  divider: "#f5f5f5",
+  text: "#111",
+  secondary: "#777",
+  muted: "#aaa",
+  ghost: "#bbb",
+  green: "#2d7a2d",
+  red: "#b83232",
+};
 
-  const quoteQ = useQuery({
-    queryKey: ["quote", ticker],
-    queryFn: () => stockApi.getQuote(ticker),
-    refetchInterval: 60000,
-  });
+const card = {
+  background: C.card,
+  border: C.border,
+  borderRadius: 12,
+  padding: "16px 18px",
+} as const;
 
-  const fundamentalsQ = useQuery({
-    queryKey: ["fundamentals", ticker],
-    queryFn: () => stockApi.getFundamentals(ticker),
-    staleTime: 3600000,
-  });
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+function Skel({ w = "100%", h = 16 }: { w?: string | number; h?: number }) {
+  return (
+    <div style={{
+      width: w, height: h, borderRadius: 6,
+      background: "linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)",
+      backgroundSize: "200% 100%",
+      animation: "shimmer 1.4s infinite",
+    }} />
+  );
+}
 
-  const historyQ = useQuery({
-    queryKey: ["history", ticker, range],
-    queryFn: () => stockApi.getHistory(ticker, range),
-    staleTime: 300000,
-  });
+// ─── Metric tile ──────────────────────────────────────────────────────────────
+function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div style={{ background: C.card, border: C.border, borderRadius: 10, padding: "12px 14px" }}>
+      <p style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>{label}</p>
+      <p style={{ fontSize: 16, fontWeight: 600, color: C.text, fontVariantNumeric: "tabular-nums" }}>{value}</p>
+      {sub && <p style={{ fontSize: 10, color: C.ghost, marginTop: 3 }}>{sub}</p>}
+    </div>
+  );
+}
 
-  const newsQ = useQuery({
-    queryKey: ["news", ticker],
-    queryFn: () => stockApi.getNews(ticker),
-    staleTime: 900000,
-  });
+// ─── Sentiment bar ────────────────────────────────────────────────────────────
+function SentimentBar({ score, label, breakdown, articlesAnalyzed, topBullish = [], topBearish = [] }: any) {
+  const pct = Math.round(((score + 1) / 2) * 100);
+  const color = label === "Bullish" ? C.green : label === "Bearish" ? C.red : C.secondary;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 24, fontWeight: 600, color: C.text, fontVariantNumeric: "tabular-nums" }}>
+          {score >= 0 ? "+" : ""}{score.toFixed(3)}
+        </span>
+        <span style={{ fontSize: 13, fontWeight: 500, color }}>{label}</span>
+      </div>
 
-  const predictionQ = useQuery({
-    queryKey: ["prediction", ticker],
-    queryFn: () => stockApi.getPrediction(ticker, 30),
-    staleTime: 21600000,
-    enabled: activeTab === "prediction",
-  });
+      {/* Track */}
+      <div style={{ height: 5, background: "#f0f0f0", borderRadius: 3, marginBottom: 6, position: "relative" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: "#333", borderRadius: 3 }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+        {["Bearish", "Neutral", "Bullish"].map(l => (
+          <span key={l} style={{ fontSize: 10, color: C.ghost }}>{l}</span>
+        ))}
+      </div>
 
-  const sentimentQ = useQuery({
-    queryKey: ["sentiment", ticker],
-    queryFn: () => stockApi.getSentiment(ticker),
-    staleTime: 900000,
-  });
+      {/* Breakdown */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+        {[
+          { label: "Positive", val: breakdown.positive, bg: "#f0f7f0", col: C.green },
+          { label: "Neutral",  val: breakdown.neutral,  bg: "#f5f5f5", col: C.secondary },
+          { label: "Negative", val: breakdown.negative, bg: "#fdf0f0", col: C.red },
+        ].map(({ label: l, val, bg, col }) => (
+          <div key={l} style={{ background: bg, border: C.border, borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums" }}>
+              {Math.round(val * 100)}%
+            </p>
+            <p style={{ fontSize: 10, color: C.ghost, marginTop: 2 }}>{l}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Top signals */}
+      {[...topBullish.slice(0, 2), ...topBearish.slice(0, 2)].length > 0 && (
+        <div style={{ borderTop: `1px solid ${C.divider}`, paddingTop: 12, display: "flex", flexDirection: "column", gap: 7 }}>
+          {topBullish.slice(0, 1).map((item: any, i: number) => (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span style={{ fontSize: 10, background: "#f0f7f0", color: C.green, border: "1px solid #d4ebd4", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                +{item.sentimentScore.toFixed(2)}
+              </span>
+              <p style={{ fontSize: 11, color: C.secondary, lineHeight: 1.4 }}>{item.title}</p>
+            </div>
+          ))}
+          {topBearish.slice(0, 1).map((item: any, i: number) => (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span style={{ fontSize: 10, background: "#fdf0f0", color: C.red, border: "1px solid #f0d4d4", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                {item.sentimentScore.toFixed(2)}
+              </span>
+              <p style={{ fontSize: 11, color: C.secondary, lineHeight: 1.4 }}>{item.title}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p style={{ fontSize: 10, color: C.ghost, marginTop: 10 }}>{articlesAnalyzed} articles · FinBERT</p>
+    </div>
+  );
+}
+
+// ─── News list ────────────────────────────────────────────────────────────────
+function NewsList({ articles }: { articles: any[] }) {
+  if (!articles.length) return <p style={{ fontSize: 12, color: C.muted, textAlign: "center", padding: "20px 0" }}>No recent news.</p>;
+  return (
+    <div>
+      {articles.slice(0, 8).map((a: any, i: number) => {
+        const badge = a.sentimentLabel === "Bullish"
+          ? { bg: "#f0f7f0", color: C.green }
+          : a.sentimentLabel === "Bearish"
+          ? { bg: "#fdf0f0", color: C.red }
+          : { bg: "#f5f5f5", color: C.secondary };
+        return (
+          <div key={i} style={{ borderTop: i > 0 ? `1px solid ${C.divider}` : "none", padding: "11px 0" }}>
+            <p style={{ fontSize: 12, color: "#333", lineHeight: 1.55, marginBottom: 6 }}>{a.title}</p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 10, color: C.ghost }}>
+                {a.source} · {formatDistanceToNow(new Date(a.publishedAt), { addSuffix: true })}
+              </span>
+              {a.sentimentLabel && (
+                <span style={{ fontSize: 10, fontWeight: 500, padding: "2px 7px", borderRadius: 4, background: badge.bg, color: badge.color }}>
+                  {a.sentimentLabel}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Fundamentals grid ────────────────────────────────────────────────────────
+function Fundamentals({ data }: { data: any }) {
+  const fmt = (n: number, prefix = "", pct = false) => {
+    if (n === undefined || n === null || isNaN(n)) return "—";
+    if (pct) return `${(n * 100).toFixed(2)}%`;
+    return `${prefix}${n.toFixed(2)}`;
+  };
+  const fmtCap = (n: number) => {
+    if (!n) return "—";
+    if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
+    if (n >= 1e9)  return `$${(n / 1e9).toFixed(2)}B`;
+    return `$${(n / 1e6).toFixed(1)}M`;
+  };
+
+  const metrics = [
+    { label: "Market Cap",     value: fmtCap(data.marketCap) },
+    { label: "P/E Ratio",      value: fmt(data.peRatio) },
+    { label: "Forward P/E",    value: fmt(data.forwardPE) },
+    { label: "EPS (TTM)",      value: fmt(data.eps, "$") },
+    { label: "Dividend Yield", value: fmt(data.dividendYield, "", true) },
+    { label: "Beta",           value: fmt(data.beta) },
+    { label: "52W High",       value: fmt(data.week52High, "$") },
+    { label: "52W Low",        value: fmt(data.week52Low, "$") },
+    { label: "ROE",            value: fmt(data.returnOnEquity, "", true) },
+    { label: "Profit Margin",  value: fmt(data.profitMargin, "", true) },
+    { label: "Price / Book",   value: fmt(data.priceToBook) },
+    { label: "Analyst Target", value: fmt(data.analystTargetPrice, "$") },
+  ];
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      {/* Header */}
-      <section className="bg-gray-950 border border-gray-800 rounded-xl p-5">
-        {quoteQ.isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-8 w-32" />
-            <Skeleton className="h-12 w-48" />
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+        {metrics.map(({ label, value }) => (
+          <div key={label} style={{ background: "#fafafa", border: C.border, borderRadius: 8, padding: "10px 12px" }}>
+            <p style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>{label}</p>
+            <p style={{ fontSize: 14, fontWeight: 600, color: C.text, fontVariantNumeric: "tabular-nums" }}>{value}</p>
           </div>
-        ) : quoteQ.data ? (
-          <StockHeader
-            ticker={ticker.toUpperCase()}
-            name={fundamentalsQ.data?.name}
-            quote={quoteQ.data}
-          />
-        ) : (
-          <p className="text-red-400">Failed to load quote for {ticker.toUpperCase()}</p>
-        )}
-      </section>
+        ))}
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column: charts */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Chart area */}
-          <section className="bg-gray-950 border border-gray-800 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex gap-1 bg-gray-900 rounded-lg p-1">
-                <button
-                  onClick={() => setActiveTab("candlestick")}
-                  className={`px-3 py-1 rounded-md text-sm transition-colors ${
-                    activeTab === "candlestick"
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  Chart
-                </button>
-                <button
-                  onClick={() => setActiveTab("prediction")}
-                  className={`px-3 py-1 rounded-md text-sm transition-colors ${
-                    activeTab === "prediction"
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  AI Forecast
-                </button>
-              </div>
+      {data.description && (
+        <p style={{ fontSize: 11, color: C.secondary, lineHeight: 1.7, marginTop: 14, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          {data.description}
+        </p>
+      )}
 
-              {activeTab === "candlestick" && (
-                <div className="flex gap-1">
-                  {RANGES.map((r) => (
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+        {[data.sector, data.industry, data.exchange].filter(Boolean).map((tag: string) => (
+          <span key={tag} style={{ fontSize: 10, color: C.secondary, background: "#f5f5f5", border: C.border, borderRadius: 20, padding: "3px 10px" }}>
+            {tag}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Prediction summary ───────────────────────────────────────────────────────
+function PredictionSummary({ data }: { data: any }) {
+  const last = data.predictions[data.predictions.length - 1];
+  const isUp = data.predictions[data.predictions.length - 1]?.price > data.predictions[0]?.price;
+  return (
+    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+      {[
+        { label: "7-day forecast", value: `$${last?.price.toFixed(2) ?? "—"}`, color: isUp ? C.green : C.red },
+        { label: "MAPE",           value: `${data.mape.toFixed(2)}%`,           color: C.text },
+        { label: "Confidence",     value: `${data.confidence.toFixed(1)}%`,     color: C.text },
+        { label: "RMSE",           value: `$${data.rmse.toFixed(2)}`,           color: C.text },
+      ].map(({ label, value, color }) => (
+        <div key={label} style={{ background: "#fafafa", border: C.border, borderRadius: 8, padding: "8px 12px" }}>
+          <p style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 3 }}>{label}</p>
+          <p style={{ fontSize: 14, fontWeight: 600, color, fontVariantNumeric: "tabular-nums" }}>{value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+export function StockDetail() {
+  const { ticker = "AAPL" } = useParams<{ ticker: string }>();
+  const navigate = useNavigate();
+  const [range, setRange]       = useState<string>("1y");
+  const [activeTab, setActiveTab] = useState<"chart" | "forecast">("chart");
+  const isDemoMode = useTickerStore(s => s.isDemoMode);
+
+  const t = ticker.toUpperCase();
+  const quoteQ       = useQuote(t);
+  const fundamentalsQ = useFundamentals(t);
+  const historyQ     = useHistory(t, range);
+  const predictionQ  = usePrediction(t, 30);
+  const sentimentQ   = useSentiment(t);
+  const newsQ        = useNews(t);
+
+  const quote = quoteQ.data;
+  const isUp  = (quote?.change ?? 0) >= 0;
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        *, *::before, *::after { box-sizing: border-box; }
+        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+      `}</style>
+
+      <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "Inter, sans-serif" }}>
+
+        {/* ── Top bar ── */}
+        <div style={{
+          position: "sticky", top: 0, zIndex: 40,
+          background: C.card, borderBottom: C.border,
+          height: 50, display: "flex", alignItems: "center",
+          padding: "0 20px", gap: 14,
+        }}>
+          <button
+            onClick={() => navigate(-1)}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              background: "none", border: "none", cursor: "pointer",
+              fontSize: 12, color: C.secondary, fontFamily: "inherit",
+              padding: "4px 8px", borderRadius: 6,
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
+            onMouseLeave={e => (e.currentTarget.style.background = "none")}
+          >
+            ← Back
+          </button>
+
+          <div style={{ width: "1px", height: 18, background: "#e8e8e8" }} />
+
+          {/* Ticker + price */}
+          {quote ? (
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flex: 1 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{t}</span>
+              {fundamentalsQ.data?.name && (
+                <span style={{ fontSize: 12, color: C.muted }}>{fundamentalsQ.data.name}</span>
+              )}
+              <span style={{ fontSize: 14, fontWeight: 600, color: C.text, fontVariantNumeric: "tabular-nums", marginLeft: "auto" }}>
+                ${quote.price.toFixed(2)}
+              </span>
+              <span style={{ fontSize: 12, color: isUp ? C.green : C.red, fontVariantNumeric: "tabular-nums" }}>
+                {isUp ? "+" : ""}{quote.change.toFixed(2)} ({quote.changePercent})
+              </span>
+            </div>
+          ) : (
+            <div style={{ flex: 1 }}><Skel w={200} h={14} /></div>
+          )}
+
+          {isDemoMode && (
+            <span style={{
+              fontSize: 11, color: C.secondary, background: C.bg,
+              border: C.border, borderRadius: 20, padding: "3px 10px", flexShrink: 0,
+            }}>
+              Demo mode
+            </span>
+          )}
+        </div>
+
+        {/* ── Body ── */}
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "18px 20px", display: "grid", gridTemplateColumns: "1fr 280px", gap: 14 }}>
+
+          {/* ═══ LEFT ═══ */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+            {/* Chart card */}
+            <div style={{ ...card }}>
+              {/* Tab + range row */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+                {/* Chart / Forecast tabs */}
+                <div style={{ display: "flex", background: C.bg, border: C.border, borderRadius: 8, padding: 3, gap: 2 }}>
+                  {(["chart", "forecast"] as const).map(tab => (
                     <button
-                      key={r}
-                      onClick={() => setRange(r)}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${
-                        range === r
-                          ? "bg-gray-700 text-white"
-                          : "text-gray-500 hover:text-gray-300"
-                      }`}
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      style={{
+                        padding: "4px 12px", borderRadius: 6, border: "none", cursor: "pointer",
+                        fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+                        background: activeTab === tab ? C.text : "transparent",
+                        color: activeTab === tab ? "#fff" : C.muted,
+                        transition: "all 0.15s",
+                      }}
                     >
-                      {r.toUpperCase()}
+                      {tab === "chart" ? "Price Chart" : "AI Forecast"}
                     </button>
                   ))}
                 </div>
+
+                {/* Range tabs */}
+                {activeTab === "chart" && (
+                  <div style={{ display: "flex", gap: 2 }}>
+                    {RANGES.map(r => (
+                      <button
+                        key={r}
+                        onClick={() => setRange(r)}
+                        style={{
+                          padding: "4px 9px", borderRadius: 6, border: "none", cursor: "pointer",
+                          fontFamily: "inherit", fontSize: 11, fontWeight: 500,
+                          background: range === r ? C.text : "transparent",
+                          color: range === r ? "#fff" : C.ghost,
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {r.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Chart content */}
+              {activeTab === "chart" ? (
+                historyQ.isLoading
+                  ? <Skel h={300} />
+                  : historyQ.data?.length
+                    ? <CandlestickChart data={historyQ.data} height={300} />
+                    : <p style={{ textAlign: "center", padding: "60px 0", fontSize: 13, color: C.muted }}>No chart data</p>
+              ) : (
+                predictionQ.isLoading
+                  ? <Skel h={300} />
+                  : predictionQ.data && historyQ.data?.length
+                    ? <>
+                        <PredictionSummary data={predictionQ.data} />
+                        <PredictionChart history={historyQ.data} prediction={predictionQ.data} />
+                      </>
+                    : <p style={{ textAlign: "center", padding: "60px 0", fontSize: 13, color: C.muted }}>
+                        {isDemoMode ? "Forecast unavailable in demo mode for this ticker" : `Training LSTM model for ${t}…`}
+                      </p>
               )}
             </div>
 
-            {activeTab === "candlestick" ? (
-              historyQ.isLoading ? (
-                <Skeleton className="h-96 w-full" />
-              ) : historyQ.data ? (
-                <CandlestickChart data={historyQ.data} />
-              ) : (
-                <p className="text-gray-500 text-sm text-center py-12">Failed to load chart data</p>
-              )
-            ) : predictionQ.isLoading ? (
-              <div className="space-y-2 py-4">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-80 w-full" />
-              </div>
-            ) : predictionQ.data && historyQ.data ? (
-              <PredictionChart history={historyQ.data} prediction={predictionQ.data} />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-64 gap-2">
-                <p className="text-gray-400 text-sm">Training LSTM model for {ticker.toUpperCase()}...</p>
-                <p className="text-gray-600 text-xs">This takes 30–60 seconds on first load</p>
-                {predictionQ.isLoading && (
-                  <div className="mt-2 animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
-                )}
+            {/* Metrics row */}
+            {quote && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+                <Metric label="Open"    value={`$${quote.open.toFixed(2)}`}         sub="Today" />
+                <Metric label="High"    value={`$${quote.high.toFixed(2)}`}         sub="Today" />
+                <Metric label="Low"     value={`$${quote.low.toFixed(2)}`}          sub="Today" />
+                <Metric label="Volume"  value={Number(quote.volume).toLocaleString()} sub="shares" />
               </div>
             )}
-          </section>
 
-          {/* Fundamentals */}
-          <section className="bg-gray-950 border border-gray-800 rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-gray-300 mb-4">Fundamental Analysis</h2>
-            {fundamentalsQ.isLoading ? (
-              <div className="grid grid-cols-4 gap-2">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <Skeleton key={i} className="h-16" />
-                ))}
-              </div>
-            ) : fundamentalsQ.data ? (
-              <FundamentalCard data={fundamentalsQ.data} />
-            ) : (
-              <p className="text-gray-500 text-sm">No fundamental data available</p>
-            )}
-          </section>
-        </div>
+            {/* Fundamentals */}
+            <div style={{ ...card }}>
+              <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 14 }}>
+                Fundamental Analysis
+              </p>
+              {fundamentalsQ.isLoading
+                ? <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+                    {Array.from({ length: 12 }).map((_, i) => <Skel key={i} h={56} />)}
+                  </div>
+                : fundamentalsQ.data
+                  ? <Fundamentals data={fundamentalsQ.data} />
+                  : <p style={{ fontSize: 12, color: C.muted }}>No data available</p>
+              }
+            </div>
+          </div>
 
-        {/* Right column: sentiment + news */}
-        <div className="space-y-6">
-          {/* Sentiment */}
-          <section className="bg-gray-950 border border-gray-800 rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-gray-300 mb-4">Market Sentiment</h2>
-            {sentimentQ.isLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-36 w-full rounded-full" />
-                <div className="grid grid-cols-3 gap-2">
-                  {[0, 1, 2].map((i) => (
-                    <Skeleton key={i} className="h-12" />
-                  ))}
-                </div>
-              </div>
-            ) : sentimentQ.data ? (
-              <SentimentGauge sentiment={sentimentQ.data} />
-            ) : (
-              <p className="text-gray-500 text-sm text-center py-4">Sentiment unavailable</p>
-            )}
-          </section>
+          {/* ═══ RIGHT ═══ */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-          {/* News */}
-          <section className="bg-gray-950 border border-gray-800 rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-gray-300 mb-4">Latest News</h2>
-            {newsQ.isLoading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-16" />
-                ))}
-              </div>
-            ) : newsQ.data ? (
-              <NewsCard articles={newsQ.data} />
-            ) : (
-              <p className="text-gray-500 text-sm">No news available</p>
-            )}
-          </section>
+            {/* Sentiment */}
+            <div style={{ ...card }}>
+              <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 14 }}>
+                Market Sentiment
+              </p>
+              {sentimentQ.isLoading
+                ? <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <Skel h={24} /><Skel h={8} /><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>{[0,1,2].map(i=><Skel key={i} h={48} />)}</div>
+                  </div>
+                : sentimentQ.data
+                  ? <SentimentBar {...sentimentQ.data} />
+                  : <p style={{ fontSize: 12, color: C.muted }}>Unavailable</p>
+              }
+            </div>
+
+            {/* News */}
+            <div style={{ ...card }}>
+              <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
+                Latest News
+              </p>
+              {newsQ.isLoading
+                ? <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {[80, 64, 80, 64].map((h, i) => <Skel key={i} h={h} />)}
+                  </div>
+                : newsQ.data?.length
+                  ? <NewsList articles={newsQ.data} />
+                  : <p style={{ fontSize: 12, color: C.muted }}>No news available</p>
+              }
+            </div>
+          </div>
         </div>
       </div>
-    </main>
+    </>
   );
 }

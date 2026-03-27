@@ -1,11 +1,11 @@
 import { Link, useNavigate } from "react-router-dom";
-import { TrendingUp, BookMarked, LogOut, User } from "lucide-react";
-import { SearchBar } from "../search/SearchBar";
 import { useAuthStore } from "../../store/authStore";
+import { useTickerStore } from "../../store/tickerStore";
 import { authApi } from "../../api/auth.api";
 
 export function Navbar() {
   const { user, logout } = useAuthStore();
+  const { isDemoMode, setDemoMode } = useTickerStore();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -15,49 +15,75 @@ export function Navbar() {
   };
 
   return (
-    <nav className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-4">
-        <Link to="/" className="flex items-center gap-2 shrink-0">
-          <TrendingUp size={20} className="text-blue-400" />
-          <span className="font-semibold text-sm text-white hidden sm:block">StockAI</span>
+    <nav style={{
+      position: "sticky", top: 0, zIndex: 40,
+      background: "#fff", borderBottom: "1px solid #e8e8e8",
+      height: 50, display: "flex", alignItems: "center",
+      padding: "0 24px", gap: 12,
+      fontFamily: "Inter, sans-serif",
+    }}>
+      {/* Logo */}
+      <Link to="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
+        <div style={{
+          width: 28, height: 28, background: "#111", borderRadius: 7,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <polyline points="1,11 4,7 7,8.5 13,2" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <span style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>StockAI</span>
+      </Link>
+
+      <div style={{ flex: 1 }} />
+
+      {/* Demo toggle */}
+      <button
+        onClick={() => setDemoMode(!isDemoMode)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "5px 12px", borderRadius: 20,
+          border: "1px solid #e8e8e8", background: "#f5f5f5",
+          fontSize: 12, color: "#555", cursor: "pointer",
+          fontFamily: "inherit",
+        }}
+      >
+        <span style={{
+          width: 6, height: 6, borderRadius: "50%",
+          background: isDemoMode ? "#888" : "#2d7a2d",
+        }} />
+        {isDemoMode ? "Demo mode" : "Live mode"}
+      </button>
+
+      {/* Auth */}
+      {user ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 12, color: "#777" }}>{user.name}</span>
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: "5px 12px", borderRadius: 8,
+              border: "1px solid #e8e8e8", background: "#fff",
+              fontSize: 12, color: "#555", cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      ) : (
+        <Link
+          to="/login"
+          style={{
+            padding: "5px 14px", borderRadius: 8,
+            background: "#111", color: "#fff",
+            fontSize: 12, fontWeight: 600,
+            textDecoration: "none", fontFamily: "inherit",
+          }}
+        >
+          Sign in
         </Link>
-
-        <div className="flex-1">
-          <SearchBar />
-        </div>
-
-        <div className="flex items-center gap-1 shrink-0">
-          {user ? (
-            <>
-              <Link
-                to="/watchlist"
-                className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-                title="Watchlist"
-              >
-                <BookMarked size={18} />
-              </Link>
-              <div className="flex items-center gap-1 ml-1">
-                <span className="text-xs text-gray-500 hidden md:block">{user.name}</span>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-gray-800 transition-colors"
-                  title="Logout"
-                >
-                  <LogOut size={18} />
-                </button>
-              </div>
-            </>
-          ) : (
-            <Link
-              to="/login"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
-            >
-              <User size={14} />
-              Sign in
-            </Link>
-          )}
-        </div>
-      </div>
+      )}
     </nav>
   );
 }
