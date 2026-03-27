@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class PredictionPoint(BaseModel):
@@ -13,5 +14,9 @@ class PredictionResponse(BaseModel):
     predictions: list[PredictionPoint]
     mape: float
     rmse: float
+    mae: float
+    r2: float
     confidence: float
     trainedOn: int
+    epochsRun: int
+    cached: Optional[bool] = None
