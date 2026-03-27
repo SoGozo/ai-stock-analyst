@@ -9,6 +9,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import authRoutes from "./routes/auth.routes";
 import stockRoutes from "./routes/stock.routes";
 import watchlistRoutes from "./routes/watchlist.routes";
+import mlRoutes from "./routes/ml.routes";
 
 export function createApp() {
   const app = express();
@@ -48,6 +49,7 @@ export function createApp() {
   app.use("/api/auth", authRoutes);
   app.use("/api/stocks", stockRoutes);
   app.use("/api/watchlist", watchlistRoutes);
+  app.use("/api/ml", mlRoutes);
 
   // 404
   app.use((_req, res) => {
