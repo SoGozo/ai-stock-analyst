@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
-import { createChart, ColorType, CrosshairMode } from "lightweight-charts";
-import { OHLCVBar } from "../../api/stock.api";
+import { createChart, ColorType, CrosshairMode, CandlestickSeries } from "lightweight-charts";
+import type { OHLCVBar } from "../../api/stock.api";
 
 interface Props {
   data: OHLCVBar[];
   height?: number;
 }
 
-export function CandlestickChart({ data, height = 380 }: Props) {
+export function CandlestickChart({ data, height = 300 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -15,27 +15,38 @@ export function CandlestickChart({ data, height = 380 }: Props) {
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "#030712" },
-        textColor: "#9ca3af",
+        background: { type: ColorType.Solid, color: "#ffffff" },
+        textColor: "#aaa",
       },
       grid: {
-        vertLines: { color: "#111827" },
-        horzLines: { color: "#111827" },
+        vertLines: { color: "#f5f5f5" },
+        horzLines: { color: "#f5f5f5" },
       },
-      crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: "#1f2937" },
-      timeScale: { borderColor: "#1f2937", timeVisible: true },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { color: "#bbb", width: 1, style: 3 },
+        horzLine: { color: "#bbb", width: 1, style: 3 },
+      },
+      rightPriceScale: {
+        borderColor: "#e8e8e8",
+        textColor: "#aaa",
+      },
+      timeScale: {
+        borderColor: "#e8e8e8",
+        timeVisible: true,
+        secondsVisible: false,
+      },
       height,
       width: containerRef.current.clientWidth,
     });
 
-    const candleSeries = chart.addCandlestickSeries({
-      upColor: "#22c55e",
-      downColor: "#ef4444",
-      borderUpColor: "#22c55e",
-      borderDownColor: "#ef4444",
-      wickUpColor: "#22c55e",
-      wickDownColor: "#ef4444",
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: "#2d7a2d",
+      downColor: "#b83232",
+      borderUpColor: "#2d7a2d",
+      borderDownColor: "#b83232",
+      wickUpColor: "#2d7a2d",
+      wickDownColor: "#b83232",
     });
 
     const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
