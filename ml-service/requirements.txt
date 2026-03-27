@@ -1,0 +1,25 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic==2.11.3
+pydantic-settings==2.9.1
+redis[asyncio]==5.2.1
+httpx==0.28.1
+python-dotenv==1.1.0
+
+# Data
+yfinance==0.2.54
+pandas==2.2.3
+numpy==1.26.4
+scikit-learn==1.6.1
+
+# Deep Learning
+tensorflow==2.15.1
+
+# NLP / Sentiment
+transformers==4.50.3
+torch==2.2.2
+sentencepiece==0.2.0
+
+# Utilities
+aiofiles==24.1.0
+python-multipart==0.0.20
