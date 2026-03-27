@@ -1,5 +1,5 @@
 import { TrendingUp, TrendingDown } from "lucide-react";
-import { Quote } from "../../api/stock.api";
+import type { Quote } from "../../api/stock.api";
 
 interface Props {
   ticker: string;

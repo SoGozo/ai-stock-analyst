@@ -1,78 +1,129 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
-import { stockApi, SearchResult } from "../../api/stock.api";
+import { Search, Clock, X } from "lucide-react";
+import { useSearch } from "../../hooks/useStockData";
+import { useTickerStore } from "../../store/tickerStore";
 
-function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
+interface Props {
+  autoFocus?: boolean;
+  onSelect?: () => void;
 }
 
-export function SearchBar() {
+export function SearchBar({ autoFocus, onSelect }: Props) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const debouncedQuery = useDebounce(query, 300);
+  const [focused, setFocused] = useState(false);
   const navigate = useNavigate();
-  const ref = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const { data: results = [] } = useQuery({
-    queryKey: ["search", debouncedQuery],
-    queryFn: () => stockApi.search(debouncedQuery),
-    enabled: debouncedQuery.length >= 1,
-    staleTime: 60000,
-  });
+  const { recentSearches, pushRecentSearch, clearRecentSearches } = useTickerStore();
+  const { data: results = [] } = useSearch(query);
+
+  const showDropdown =
+    focused && (query.length === 0 ? recentSearches.length > 0 : results.length > 0);
 
   useEffect(() => {
-    setOpen(results.length > 0 && query.length > 0);
-  }, [results, query]);
+    setOpen(showDropdown);
+  }, [showDropdown]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setFocused(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const select = (r: SearchResult) => {
-    setQuery("");
-    setOpen(false);
-    navigate(`/stock/${r.ticker}`);
+  const select = useCallback(
+    (ticker: string) => {
+      pushRecentSearch(ticker.toUpperCase());
+      setQuery("");
+      setOpen(false);
+      setFocused(false);
+      navigate(`/stock/${ticker.toUpperCase()}`);
+      onSelect?.();
+    },
+    [navigate, pushRecentSearch, onSelect]
+  );
+
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      setOpen(false);
+      inputRef.current?.blur();
+    }
   };
 
   return (
-    <div ref={ref} className="relative w-full max-w-md">
-      <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 focus-within:border-blue-500 transition-colors">
-        <Search size={16} className="text-gray-400 shrink-0" />
+    <div ref={containerRef} className="relative w-full max-w-md">
+      <div
+        className={`flex items-center gap-2 bg-gray-900 border rounded-lg px-3 py-2 transition-colors ${
+          focused ? "border-blue-500" : "border-gray-700"
+        }`}
+      >
+        <Search size={15} className="text-gray-400 shrink-0" />
         <input
+          ref={inputRef}
           type="text"
           value={query}
+          autoFocus={autoFocus}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search stocks (AAPL, TSLA...)"
+          onFocus={() => setFocused(true)}
+          onKeyDown={handleKey}
+          placeholder="Search stocks (AAPL, TSLA…)"
           className="bg-transparent text-sm text-gray-100 placeholder-gray-500 outline-none w-full"
         />
+        {query && (
+          <button onClick={() => setQuery("")} className="text-gray-500 hover:text-gray-300">
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {open && (
         <div className="absolute top-full mt-1 left-0 right-0 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-50 overflow-hidden">
-          {results.slice(0, 8).map((r) => (
-            <button
-              key={r.ticker}
-              onClick={() => select(r)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800 transition-colors text-left"
-            >
-              <div>
-                <span className="font-mono font-semibold text-blue-400 text-sm">{r.ticker}</span>
-                <p className="text-gray-400 text-xs mt-0.5 truncate max-w-xs">{r.name}</p>
+          {query.length === 0 ? (
+            <>
+              <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
+                <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                  <Clock size={11} /> Recent searches
+                </span>
+                <button
+                  onClick={clearRecentSearches}
+                  className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                >
+                  Clear
+                </button>
               </div>
-              <span className="text-xs text-gray-600">{r.type}</span>
-            </button>
-          ))}
+              {recentSearches.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => select(t)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-800 transition-colors text-left"
+                >
+                  <Clock size={12} className="text-gray-600 shrink-0" />
+                  <span className="font-mono font-semibold text-gray-300 text-sm">{t}</span>
+                </button>
+              ))}
+            </>
+          ) : (
+            results.slice(0, 8).map((r) => (
+              <button
+                key={r.ticker}
+                onClick={() => select(r.ticker)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800 transition-colors text-left"
+              >
+                <div>
+                  <span className="font-mono font-semibold text-blue-400 text-sm">{r.ticker}</span>
+                  <p className="text-gray-400 text-xs mt-0.5 truncate max-w-xs">{r.name}</p>
+                </div>
+                <span className="text-xs text-gray-600 shrink-0">{r.type}</span>
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
