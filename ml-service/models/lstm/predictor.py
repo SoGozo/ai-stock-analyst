@@ -1,95 +1,134 @@
+"""
+LSTM inference engine.
+Loads model.h5 + scaler.pkl from saved_models/{ticker}/.
+Falls back to on-demand training if no saved model exists.
+"""
+import os
+import json
+import pickle
 import numpy as np
-import pandas as pd
-from datetime import date, timedelta
-from models.lstm.trainer import train_model, load_model_and_preprocessor
+from datetime import timedelta
+
 from services.yfinance_service import fetch_ohlcv
 from core.config import settings
+
+SEQ_LEN   = 60
+FEATURES  = ["Open", "High", "Low", "Close", "Volume"]
+TARGET_IDX = 3    # Close
+
+
+def _load_artifacts(ticker: str):
+    """Load model + scaler from disk. Returns (model, scaler, metrics) or raises."""
+    model_dir = os.path.join(settings.model_cache_dir, ticker.upper())
+    h5_path     = os.path.join(model_dir, "model.h5")
+    keras_path  = os.path.join(model_dir, "model.keras")
+    scaler_path = os.path.join(model_dir, "scaler.pkl")
+    metrics_path = os.path.join(model_dir, "metrics.json")
+
+    if not os.path.exists(scaler_path):
+        return None, None, None
+
+    # Prefer .h5 (max compatibility), fall back to .keras
+    model_path = h5_path if os.path.exists(h5_path) else keras_path
+    if not os.path.exists(model_path):
+        return None, None, None
+
+    try:
+        from tensorflow import keras
+    except ImportError:
+        raise RuntimeError("TensorFlow not installed (requires Python <=3.12)")
+
+    model = keras.models.load_model(model_path, compile=False)
+    model.compile(optimizer="adam", loss="huber", metrics=["mae"])
+
+    with open(scaler_path, "rb") as f:
+        scaler = pickle.load(f)
+
+    metrics = {}
+    if os.path.exists(metrics_path):
+        with open(metrics_path) as f:
+            metrics = json.load(f)
+
+    return model, scaler, metrics
+
+
+def _inverse_close(scaler, scaled_close: np.ndarray) -> np.ndarray:
+    dummy = np.zeros((len(scaled_close), len(FEATURES)))
+    dummy[:, TARGET_IDX] = scaled_close
+    return scaler.inverse_transform(dummy)[:, TARGET_IDX]
 
 
 def predict(ticker: str, days: int = 30) -> dict:
     """
-    Run LSTM prediction for a ticker.
-    Trains model on-demand if not cached to disk.
-    Uses recursive multi-step forecasting.
+    Load saved LSTM model and run recursive multi-step forecast.
+    Returns structured dict ready to be JSON-serialised by FastAPI.
     """
-    model, preprocessor = load_model_and_preprocessor(ticker)
+    ticker = ticker.upper()
+    model, scaler, saved_metrics = _load_artifacts(ticker)
 
     if model is None:
-        metrics = train_model(ticker)
-        model, preprocessor = load_model_and_preprocessor(ticker)
-    else:
-        # Re-evaluate metrics on fresh data
-        df_eval = fetch_ohlcv(ticker, period="3m")
-        scaled = preprocessor.transform(df_eval)
-        seq_len = settings.lstm_sequence_length
-        if len(scaled) > seq_len:
-            X_recent = scaled[-seq_len:].reshape(1, seq_len, 5)
-            pred_scaled = model.predict(X_recent, verbose=0).flatten()
-            pred_actual = preprocessor.inverse_close(pred_scaled)
-            actual_close = df_eval["Close"].values[-1]
-            mape = float(abs(actual_close - pred_actual[0]) / (actual_close + 1e-8) * 100)
-            rmse = float(abs(actual_close - pred_actual[0]))
-        else:
-            mape, rmse = 0.0, 0.0
-        metrics = {"mape": mape, "rmse": rmse}
+        # No pre-trained model — train on the fly
+        from models.lstm.trainer import train_model, load_model_and_preprocessor
+        saved_metrics = train_model(ticker)
+        # trainer uses its own preprocessor; reload via load_model_and_preprocessor
+        model_v2, preprocessor = load_model_and_preprocessor(ticker)
+        if model_v2 is None:
+            raise RuntimeError(f"Training failed for {ticker}")
+        # Re-enter with the now-saved model
+        return predict(ticker, days)
 
-    # Fetch recent data to seed the recursive forecast
+    # ── Fetch recent data to seed the forecast window ────────────────────────
     df = fetch_ohlcv(ticker, period="6m")
-    seq_len = settings.lstm_sequence_length
-    scaled_data = preprocessor.transform(df)
+    if len(df) < SEQ_LEN:
+        raise ValueError(f"Not enough data for {ticker} (need {SEQ_LEN} days)")
 
-    if len(scaled_data) < seq_len:
-        raise ValueError(f"Not enough data for {ticker}")
+    full_scaled = scaler.transform(df[FEATURES].values)
+    window = full_scaled[-SEQ_LEN:].copy()   # (60, 5)
 
-    window = scaled_data[-seq_len:].copy()  # shape (seq_len, 5)
+    # ── Recursive multi-step forecast ────────────────────────────────────────
     raw_preds = []
-
     for _ in range(days):
-        X = window.reshape(1, seq_len, 5)
-        next_close_scaled = model.predict(X, verbose=0)[0, 0]
-        raw_preds.append(next_close_scaled)
-
-        # Shift window: drop oldest, append new row with predicted close
+        X_in = window.reshape(1, SEQ_LEN, len(FEATURES))
+        next_scaled = float(model.predict(X_in, verbose=0)[0, 0])
+        raw_preds.append(next_scaled)
         new_row = window[-1].copy()
-        new_row[3] = next_close_scaled  # update close
+        new_row[TARGET_IDX] = next_scaled
         window = np.vstack([window[1:], new_row])
 
-    predicted_closes = preprocessor.inverse_close(np.array(raw_preds))
+    predicted_prices = _inverse_close(scaler, np.array(raw_preds))
 
-    # Compute confidence interval from residuals on last known data
-    recent_scaled = scaled_data[-seq_len - 10 : -1]
-    residuals = []
-    for i in range(len(recent_scaled) - seq_len):
-        X_r = recent_scaled[i : i + seq_len].reshape(1, seq_len, 5)
-        pred_s = model.predict(X_r, verbose=0)[0, 0]
-        pred_r = preprocessor.inverse_close(np.array([pred_s]))[0]
-        actual_r = preprocessor.inverse_close(np.array([recent_scaled[i + seq_len, 3]]))[0]
-        residuals.append(abs(pred_r - actual_r))
+    # ── Confidence interval from saved RMSE ──────────────────────────────────
+    rmse = float(saved_metrics.get("rmse", predicted_prices.std() * 0.05))
+    std  = rmse
+    z    = 1.96   # 95% CI
 
-    std = float(np.std(residuals)) if residuals else predicted_closes.std() * 0.05
-    z = 1.96  # 95% CI
-
+    # ── Build date list (business days only) ─────────────────────────────────
     last_date = df.index[-1].date()
-    predictions = []
-    for i, price in enumerate(predicted_closes):
-        pred_date = last_date + timedelta(days=i + 1)
-        # Skip weekends (simple approximation)
-        while pred_date.weekday() >= 5:
-            pred_date += timedelta(days=1)
-        predictions.append({
-            "date": pred_date.isoformat(),
-            "price": round(float(price), 2),
-            "lower": round(float(price - z * std), 2),
-            "upper": round(float(price + z * std), 2),
-        })
+    from pandas import bdate_range
+    forecast_dates = list(bdate_range(
+        start=last_date + timedelta(days=1), periods=days
+    ))
 
-    confidence = max(0, min(100, round(100 - metrics.get("mape", 10), 1)))
+    predictions = [
+        {
+            "date":  str(d.date()),
+            "price": round(float(p), 2),
+            "lower": round(float(p - z * std), 2),
+            "upper": round(float(p + z * std), 2),
+        }
+        for d, p in zip(forecast_dates, predicted_prices)
+    ]
+
+    confidence = max(0.0, min(100.0, round(100.0 - float(saved_metrics.get("mape", 10.0)), 1)))
 
     return {
-        "ticker": ticker.upper(),
+        "ticker":      ticker,
         "predictions": predictions,
-        "mape": round(metrics.get("mape", 0), 2),
-        "rmse": round(metrics.get("rmse", 0), 2),
-        "confidence": confidence,
-        "trainedOn": len(df),
+        "mape":        round(float(saved_metrics.get("mape", 0)), 4),
+        "rmse":        round(float(saved_metrics.get("rmse", 0)), 4),
+        "mae":         round(float(saved_metrics.get("mae",  0)), 4),
+        "r2":          round(float(saved_metrics.get("r2",   0)), 4),
+        "confidence":  confidence,
+        "trainedOn":   int(saved_metrics.get("train_samples", 0)),
+        "epochsRun":   int(saved_metrics.get("epochs_run", 0)),
     }

@@ -44,3 +44,12 @@ docker-compose.override.yml
 # Coverage
 coverage/
 .nyc_output/
+
+# Python venvs
+.venv/
+.venv_nb/
+venv*/
+.python-version
+
+# Notebook outputs (large PNGs tracked separately)
+notebooks/.venv_nb/

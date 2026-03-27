@@ -1,0 +1,19 @@
+{
+  "ticker": "AAPL",
+  "rmse": 16.2353,
+  "mae": 14.1906,
+  "mape": 5.5215,
+  "r2": -2.4388,
+  "epochs_run": 11,
+  "train_samples": 341,
+  "test_samples": 41,
+  "seq_len": 60,
+  "features": [
+    "Open",
+    "High",
+    "Low",
+    "Close",
+    "Volume"
+  ],
+  "trained_at": "2026-03-27T14:23:52.032281"
+}

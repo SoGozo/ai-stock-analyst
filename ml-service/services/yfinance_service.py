@@ -7,13 +7,16 @@ import pandas as pd
 from typing import Optional
 
 
+_PERIOD_MAP = {"2y": "2y", "1y": "1y", "6m": "6mo", "3m": "3mo", "1m": "1mo", "5y": "5y", "max": "max"}
+
 def fetch_ohlcv(ticker: str, period: str = "2y") -> pd.DataFrame:
     """
     Fetch OHLCV daily bars.
     Returns DataFrame indexed by Date with columns: Open, High, Low, Close, Volume.
     """
+    yf_period = _PERIOD_MAP.get(period, period)  # normalise short codes
     stock = yf.Ticker(ticker)
-    df = stock.history(period=period, auto_adjust=True)
+    df = stock.history(period=yf_period, auto_adjust=True)
     if df.empty:
         raise ValueError(f"No price data found for ticker '{ticker}'")
     df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
