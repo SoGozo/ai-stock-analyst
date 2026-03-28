@@ -20,7 +20,7 @@ const queryClient = new QueryClient({
 
 function AppShell() {
   const { pathname } = useLocation();
-  const showNavbar = pathname !== "/";
+  const showNavbar = pathname !== "/" && !pathname.startsWith("/stock/");
   return (
     <>
       {showNavbar && <Navbar />}
@@ -45,10 +45,11 @@ export default function App() {
         position="bottom-right"
         toastOptions={{
           style: {
-            background: "#111827",
-            color: "#f9fafb",
-            border: "1px solid #374151",
+            background: "#fff",
+            color: "#111",
+            border: "1px solid #e8e8e8",
             fontSize: "13px",
+            fontFamily: "Inter, sans-serif",
           },
         }}
       />

@@ -126,3 +126,12 @@ export async function getMlHealth(): Promise<{ status: string }> {
   const res = await ml.get<{ status: string }>("/health");
   return res.data;
 }
+
+export interface OHLCVBar {
+  date: string; open: number; high: number; low: number; close: number; volume: number;
+}
+
+export async function getMlHistory(ticker: string, range = "1y"): Promise<{ ticker: string; range: string; bars: OHLCVBar[] }> {
+  const res = await ml.get<{ ticker: string; range: string; bars: OHLCVBar[] }>(`/history/${ticker}`, { params: { range } });
+  return res.data;
+}

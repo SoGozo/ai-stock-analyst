@@ -8,7 +8,9 @@
       "Bash(npm show:*)",
       "Bash(docker --version)",
       "Bash(git --version)",
-      "Bash(npm create:*)"
+      "Bash(npm create:*)",
+      "Bash(npx vite:*)",
+      "Bash(ls /Users/souravgoyal/Desktop/Projects/fintech/.env*)"
     ]
   }
 }

@@ -1,9 +1,17 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { TrendingUp } from "lucide-react";
 import { authApi } from "../api/auth.api";
 import { useAuthStore } from "../store/authStore";
 import toast from "react-hot-toast";
+
+const C = {
+  bg: "#f5f5f5",
+  card: "#fff",
+  border: "1px solid #e8e8e8",
+  text: "#111",
+  muted: "#777",
+  ghost: "#bbb",
+};
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -27,51 +35,109 @@ export function Login() {
     }
   };
 
+  const inputStyle = {
+    width: "100%",
+    background: C.bg,
+    border: C.border,
+    borderRadius: 8,
+    padding: "9px 12px",
+    fontSize: 13,
+    color: C.text,
+    outline: "none",
+    fontFamily: "Inter, sans-serif",
+    boxSizing: "border-box" as const,
+  };
+
   return (
-    <main className="min-h-[calc(100svh-56px)] flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <TrendingUp size={24} className="text-blue-400" />
-          <span className="font-bold text-xl">StockAI</span>
+    <main style={{
+      minHeight: "calc(100svh - 50px)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "0 16px",
+      background: C.bg,
+      fontFamily: "Inter, sans-serif",
+    }}>
+      <div style={{ width: "100%", maxWidth: 360 }}>
+        {/* Logo */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 28 }}>
+          <div style={{
+            width: 30, height: 30, background: "#111", borderRadius: 8,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <svg width="15" height="15" viewBox="0 0 14 14" fill="none">
+              <polyline points="1,11 4,7 7,8.5 13,2" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <span style={{ fontSize: 16, fontWeight: 600, color: C.text }}>StockAI</span>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-5">
-          <h1 className="text-lg font-semibold text-center">Sign in</h1>
+        <div style={{
+          background: C.card,
+          border: C.border,
+          borderRadius: 14,
+          padding: "28px 24px",
+        }}>
+          <h1 style={{ fontSize: 16, fontWeight: 600, color: C.text, textAlign: "center", marginBottom: 24 }}>
+            Sign in
+          </h1>
 
-          <form onSubmit={submit} className="space-y-4">
+          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Email</label>
+              <label style={{ display: "block", fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 500 }}>
+                Email
+              </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition-colors"
+                style={inputStyle}
+                onFocus={e => (e.currentTarget.style.borderColor = "#bbb")}
+                onBlur={e => (e.currentTarget.style.borderColor = "#e8e8e8")}
               />
             </div>
+
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Password</label>
+              <label style={{ display: "block", fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 500 }}>
+                Password
+              </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition-colors"
+                style={inputStyle}
+                onFocus={e => (e.currentTarget.style.borderColor = "#bbb")}
+                onBlur={e => (e.currentTarget.style.borderColor = "#e8e8e8")}
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 rounded-lg text-sm font-medium transition-colors"
+              style={{
+                width: "100%",
+                padding: "10px",
+                background: loading ? "#555" : "#111",
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: loading ? "not-allowed" : "pointer",
+                fontFamily: "inherit",
+                marginTop: 4,
+                transition: "background 0.15s",
+              }}
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? "Signing in…" : "Sign in"}
             </button>
           </form>
 
-          <p className="text-center text-xs text-gray-500">
+          <p style={{ textAlign: "center", fontSize: 12, color: C.ghost, marginTop: 20 }}>
             Don't have an account?{" "}
-            <Link to="/register" className="text-blue-400 hover:underline">
+            <Link to="/register" style={{ color: C.muted, fontWeight: 500, textDecoration: "none" }}>
               Register
             </Link>
           </p>

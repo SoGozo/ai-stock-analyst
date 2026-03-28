@@ -136,7 +136,7 @@ function NewsList({ articles }: { articles: any[] }) {
             <p style={{ fontSize: 12, color: "#333", lineHeight: 1.55, marginBottom: 6 }}>{a.title}</p>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 10, color: C.ghost }}>
-                {a.source} · {formatDistanceToNow(new Date(a.publishedAt), { addSuffix: true })}
+                {a.source}{a.publishedAt ? ` · ${formatDistanceToNow(new Date(a.publishedAt), { addSuffix: true })}` : ""}
               </span>
               {a.sentimentLabel && (
                 <span style={{ fontSize: 10, fontWeight: 500, padding: "2px 7px", borderRadius: 4, background: badge.bg, color: badge.color }}>
@@ -254,6 +254,8 @@ export function StockDetail() {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
         *, *::before, *::after { box-sizing: border-box; }
         @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+        .sd-grid { display: grid; grid-template-columns: 1fr 300px; gap: 14px; }
+        @media (max-width: 1024px) { .sd-grid { grid-template-columns: 1fr; } }
       `}</style>
 
       <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "Inter, sans-serif" }}>
@@ -310,7 +312,7 @@ export function StockDetail() {
         </div>
 
         {/* ── Body ── */}
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "18px 20px", display: "grid", gridTemplateColumns: "1fr 280px", gap: 14 }}>
+        <div className="sd-grid" style={{ maxWidth: 1200, margin: "0 auto", padding: "18px 20px" }}>
 
           {/* ═══ LEFT ═══ */}
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -393,7 +395,7 @@ export function StockDetail() {
 
             {/* Fundamentals */}
             <div style={{ ...card }}>
-              <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 14 }}>
+              <p style={{ fontSize: 11, color: "#555", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 14 }}>
                 Fundamental Analysis
               </p>
               {fundamentalsQ.isLoading
@@ -408,11 +410,11 @@ export function StockDetail() {
           </div>
 
           {/* ═══ RIGHT ═══ */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 58, maxHeight: "calc(100vh - 70px)", overflow: "hidden" }}>
 
             {/* Sentiment */}
             <div style={{ ...card }}>
-              <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 14 }}>
+              <p style={{ fontSize: 11, color: "#555", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 14 }}>
                 Market Sentiment
               </p>
               {sentimentQ.isLoading
@@ -426,18 +428,20 @@ export function StockDetail() {
             </div>
 
             {/* News */}
-            <div style={{ ...card }}>
-              <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
+            <div style={{ ...card, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+              <p style={{ fontSize: 11, color: "#555", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 12, flexShrink: 0 }}>
                 Latest News
               </p>
-              {newsQ.isLoading
-                ? <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {[80, 64, 80, 64].map((h, i) => <Skel key={i} h={h} />)}
-                  </div>
-                : newsQ.data?.length
-                  ? <NewsList articles={newsQ.data} />
-                  : <p style={{ fontSize: 12, color: C.muted }}>No news available</p>
-              }
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {newsQ.isLoading
+                  ? <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {[80, 64, 80, 64].map((h, i) => <Skel key={i} h={h} />)}
+                    </div>
+                  : newsQ.data?.length
+                    ? <NewsList articles={newsQ.data} />
+                    : <p style={{ fontSize: 12, color: C.muted }}>No news available</p>
+                }
+              </div>
             </div>
           </div>
         </div>

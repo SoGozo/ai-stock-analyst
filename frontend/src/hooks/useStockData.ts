@@ -14,7 +14,7 @@ export function useQuote(ticker: string) {
   const demo = useTickerStore((s) => s.isDemoMode);
   return useQuery({
     queryKey: ["quote", ticker, demo],
-    queryFn: () => (demo ? DEMO_DATA[ticker]?.quote ?? null : stockApi.getQuote(ticker)),
+    queryFn: () => (demo ? DEMO_DATA[ticker]?.quote ?? null : mlApi.getQuote(ticker)),
     staleTime: demo ? DEMO_STALE : 60_000,
     refetchInterval: demo ? false : 60_000,
     enabled: !!ticker,
@@ -41,7 +41,7 @@ export function useHistory(ticker: string, range = "1y") {
         const sliceMap: Record<string, number> = { "1m": 21, "3m": 63, "6m": 126, "1y": 252, "2y": 365 };
         return history.slice(-(sliceMap[range] ?? 252));
       }
-      return stockApi.getHistory(ticker, range);
+      return mlApi.getHistory(ticker, range);
     },
     staleTime: demo ? DEMO_STALE : 300_000,
     enabled: !!ticker,

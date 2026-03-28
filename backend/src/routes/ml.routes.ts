@@ -18,6 +18,9 @@ router.get("/predict/:ticker", ml.getPrediction);
 // Aggregate sentiment
 router.get("/sentiment/:ticker", ml.getSentiment);
 
+// OHLCV history via yfinance
+router.get("/history/:ticker", ml.getHistory);
+
 // ML service health
 router.get("/health", ml.mlHealth);
 

@@ -69,6 +69,18 @@ export const getSentiment = asyncHandler(async (req: Request, res: Response) => 
   res.json({ success: true, data });
 });
 
+export const getHistory = asyncHandler(async (req: Request, res: Response) => {
+  const t = ticker(req);
+  const range = (req.query.range as string) ?? "1y";
+  const key = `history:ml:${t}:${range}`;
+  const cached = await redis.get(key);
+  if (cached) return res.json(JSON.parse(cached));
+
+  const data = await mlProxy.getMlHistory(t, range);
+  await redis.setex(key, 900, JSON.stringify(data));
+  res.json(data);
+});
+
 export const mlHealth = asyncHandler(async (_req: Request, res: Response) => {
   const data = await mlProxy.getMlHealth();
   res.json({ success: true, data });

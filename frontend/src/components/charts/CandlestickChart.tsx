@@ -75,5 +75,9 @@ export function CandlestickChart({ data, height = 300 }: Props) {
     };
   }, [data, height]);
 
-  return <div ref={containerRef} style={{ height }} />;
+  return (
+    <div ref={containerRef} style={{ height }}>
+      <style>{`.tv-lightweight-charts a[href*="tradingview"] { display: none !important; }`}</style>
+    </div>
+  );
 }

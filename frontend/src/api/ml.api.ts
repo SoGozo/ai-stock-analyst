@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import type { OHLCVBar } from "./stock.api";
 
 export interface Fundamentals {
   ticker: string;
@@ -71,6 +72,34 @@ export const mlApi = {
 
   getNews: (ticker: string) =>
     apiClient
-      .get<{ data: NewsArticle[] }>(`/ml/news/${ticker}`)
-      .then((r) => r.data.data),
+      .get<{ success: boolean; data: { ticker: string; articles: NewsArticle[]; count: number } }>(`/ml/news/${ticker}`)
+      .then((r) => r.data.data.articles),
+
+  getHistory: (ticker: string, range = "1y") =>
+    apiClient
+      .get<{ bars: OHLCVBar[] }>(`/ml/history/${ticker}`, { params: { range } })
+      .then((r) => r.data.bars),
+
+  getQuote: (ticker: string) =>
+    apiClient
+      .get<{ bars: OHLCVBar[] }>(`/ml/history/${ticker}`, { params: { range: "5d" } })
+      .then((r) => {
+        const bars = r.data.bars;
+        const last = bars[bars.length - 1];
+        const prev = bars[bars.length - 2] ?? last;
+        const change = Math.round((last.close - prev.close) * 100) / 100;
+        const changePct = ((change / prev.close) * 100).toFixed(2);
+        return {
+          ticker,
+          price: last.close,
+          open: last.open,
+          high: last.high,
+          low: last.low,
+          volume: last.volume,
+          latestTradingDay: last.date,
+          previousClose: prev.close,
+          change,
+          changePercent: `${changePct}%`,
+        };
+      }),
 };

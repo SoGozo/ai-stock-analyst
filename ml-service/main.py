@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import prediction, sentiment, health, fundamentals, indicators, news
+from api.routes import prediction, sentiment, health, fundamentals, indicators, news, history
 
 app = FastAPI(
     title="AI Stock Analyst — ML Service",
@@ -16,6 +16,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(history.router)
 app.include_router(fundamentals.router)
 app.include_router(indicators.router)
 app.include_router(news.router)
