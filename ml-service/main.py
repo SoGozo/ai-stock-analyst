@@ -1,11 +1,37 @@
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes import prediction, sentiment, health, fundamentals, indicators, news, history
+
+log = logging.getLogger(__name__)
+
+
+def _preload_finbert():
+    """Load FinBERT model in a background thread so it's warm for the first request."""
+    try:
+        from models.sentiment.analyzer import _load_pipeline
+        _load_pipeline()
+        log.info("FinBERT preloaded successfully.")
+    except Exception as e:
+        log.warning("FinBERT preload failed (will retry on first request): %s", e)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Preload FinBERT in a thread to avoid blocking startup
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _preload_finbert)
+    yield
+
 
 app = FastAPI(
     title="AI Stock Analyst — ML Service",
     description="LSTM prediction · FinBERT sentiment · Technical indicators · Fundamentals",
     version="2.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

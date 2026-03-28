@@ -53,7 +53,7 @@ function SearchBox() {
   const [open, setOpen]     = useState(false);
   const navigate            = useNavigate();
   const { pushRecentSearch } = useTickerStore();
-  const ref                 = useRef(null);
+  const ref                 = useRef<HTMLDivElement>(null);
   const { data: results = [] } = useSearch(query);
 
   useEffect(() => {
@@ -61,21 +61,21 @@ function SearchBox() {
   }, [query, results]);
 
   useEffect(() => {
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const go = (ticker) => {
+  const go = (ticker: string) => {
     pushRecentSearch(ticker.toUpperCase());
     setQuery("");
     setOpen(false);
     navigate(`/stock/${ticker.toUpperCase()}`);
   };
 
-  const onKey = (e) => {
+  const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && query.trim()) {
       go(query.trim().toUpperCase());
     }
@@ -192,6 +192,24 @@ export default function Dashboard() {
 
         {/* Right side */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Guide */}
+          <Link
+            to="/guide"
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "5px 12px", borderRadius: 8,
+              border: "1px solid #e8e8e8", background: "#fff",
+              fontSize: 12, fontWeight: 500, color: "#555",
+              textDecoration: "none", fontFamily: "inherit",
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M2 3h4.5c1 0 1.5.5 1.5 1.5v9S7 12 5.5 12H2V3z" stroke="#555" strokeWidth="1.3" strokeLinejoin="round"/>
+              <path d="M14 3H9.5C8.5 3 8 3.5 8 4.5v9s1-1.5 2.5-1.5H14V3z" stroke="#555" strokeWidth="1.3" strokeLinejoin="round"/>
+            </svg>
+            Guide
+          </Link>
+
           {/* Demo / Live toggle */}
           <button
             onClick={() => setDemoMode(!isDemoMode)}

@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
@@ -125,14 +126,16 @@ async def get_indicators(
             data["source"] = "alphavantage"
         else:
             # Default: compute locally from yfinance — saves precious AV API calls
-            data = _compute_local_indicators(ticker)
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(None, _compute_local_indicators, ticker)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
         # AV rate limit hit — fall back to local computation
         if "rate limit" in str(e).lower() or "limit" in str(e).lower():
             try:
-                data = _compute_local_indicators(ticker)
+                loop = asyncio.get_event_loop()
+                data = await loop.run_in_executor(None, _compute_local_indicators, ticker)
                 data["warning"] = "Alpha Vantage rate limit reached; fell back to local computation"
             except Exception as e2:
                 raise HTTPException(status_code=500, detail=str(e2))

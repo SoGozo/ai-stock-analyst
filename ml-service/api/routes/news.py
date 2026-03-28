@@ -42,15 +42,29 @@ async def get_news(
     if cached:
         return {**cached, "cached": True}
 
-    # Get company name for better search coverage
-    try:
-        info = fetch_company_info(ticker)
-        company_name = info.get("name")
-    except Exception:
-        company_name = None
+    # Fetch company info and news in parallel
+    import asyncio
 
+    async def _get_company_name():
+        try:
+            loop = asyncio.get_event_loop()
+            info = await loop.run_in_executor(None, fetch_company_info, ticker)
+            return info.get("name")
+        except Exception:
+            return None
+
+    # Start both tasks concurrently — news can start with just the ticker
+    company_name_task = asyncio.create_task(_get_company_name())
+    basic_news_task = asyncio.create_task(fetch_stock_news(ticker, None, page_size=limit))
+
+    company_name = await company_name_task
+
+    # If we got a company name, re-fetch with better query; otherwise use basic results
     try:
-        articles = await fetch_stock_news(ticker, company_name, page_size=limit)
+        if company_name:
+            articles = await fetch_stock_news(ticker, company_name, page_size=limit)
+        else:
+            articles = await basic_news_task
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"NewsAPI error: {str(e)}")
 

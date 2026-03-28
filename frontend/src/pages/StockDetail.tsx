@@ -301,6 +301,23 @@ export function StockDetail() {
             <div style={{ flex: 1 }}><Skel w={200} h={14} /></div>
           )}
 
+          <a
+            href="/guide"
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "4px 10px", borderRadius: 6,
+              border: C.border, background: C.card,
+              fontSize: 11, fontWeight: 500, color: C.secondary,
+              textDecoration: "none", fontFamily: "inherit", flexShrink: 0,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M2 3h4.5c1 0 1.5.5 1.5 1.5v9S7 12 5.5 12H2V3z" stroke="#555" strokeWidth="1.3" strokeLinejoin="round"/>
+              <path d="M14 3H9.5C8.5 3 8 3.5 8 4.5v9s1-1.5 2.5-1.5H14V3z" stroke="#555" strokeWidth="1.3" strokeLinejoin="round"/>
+            </svg>
+            Guide
+          </a>
+
           {isDemoMode && (
             <span style={{
               fontSize: 11, color: C.secondary, background: C.bg,

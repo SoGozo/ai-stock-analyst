@@ -51,8 +51,10 @@ async def get_prediction(
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
+    import asyncio
     try:
-        result = predict(ticker, days)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, predict, ticker, days)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:

@@ -26,7 +26,7 @@ export const useTickerStore = create<TickerStore>()(
       currentTicker: "AAPL",
       setCurrentTicker: (ticker) => set({ currentTicker: ticker.toUpperCase() }),
 
-      isDemoMode: true, // default ON so the app works without API keys
+      isDemoMode: false,
       setDemoMode: (v) => set({ isDemoMode: v }),
 
       recentSearches: [],

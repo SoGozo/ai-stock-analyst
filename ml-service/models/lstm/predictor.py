@@ -2,24 +2,52 @@
 LSTM inference engine.
 Loads model.h5 + scaler.pkl from saved_models/{ticker}/.
 Falls back to on-demand training if no saved model exists.
+
+Models are cached in memory after first load to avoid repeated disk I/O.
 """
 import os
 import json
 import pickle
+import logging
 import numpy as np
 from datetime import timedelta
 
 from services.yfinance_service import fetch_ohlcv
 from core.config import settings
 
+log = logging.getLogger(__name__)
+
 SEQ_LEN   = 60
 FEATURES  = ["Open", "High", "Low", "Close", "Volume"]
 TARGET_IDX = 3    # Close
 
+# ── In-memory model cache ───────────────────────────────────────────────────
+_model_cache: dict[str, tuple] = {}   # ticker → (model, scaler, metrics)
+_keras = None
+
+
+def _get_keras():
+    """Import keras once and cache the module reference."""
+    global _keras
+    if _keras is not None:
+        return _keras
+    try:
+        from tensorflow import keras
+        _keras = keras
+        return _keras
+    except ImportError:
+        raise RuntimeError("TensorFlow not installed (requires Python <=3.12)")
+
 
 def _load_artifacts(ticker: str):
-    """Load model + scaler from disk. Returns (model, scaler, metrics) or raises."""
-    model_dir = os.path.join(settings.model_cache_dir, ticker.upper())
+    """Load model + scaler from disk (or memory cache). Returns (model, scaler, metrics) or (None, None, None)."""
+    ticker = ticker.upper()
+
+    cached = _model_cache.get(ticker)
+    if cached:
+        return cached
+
+    model_dir = os.path.join(settings.model_cache_dir, ticker)
     h5_path     = os.path.join(model_dir, "model.h5")
     keras_path  = os.path.join(model_dir, "model.keras")
     scaler_path = os.path.join(model_dir, "scaler.pkl")
@@ -28,16 +56,13 @@ def _load_artifacts(ticker: str):
     if not os.path.exists(scaler_path):
         return None, None, None
 
-    # Prefer .h5 (max compatibility), fall back to .keras
     model_path = h5_path if os.path.exists(h5_path) else keras_path
     if not os.path.exists(model_path):
         return None, None, None
 
-    try:
-        from tensorflow import keras
-    except ImportError:
-        raise RuntimeError("TensorFlow not installed (requires Python <=3.12)")
+    keras = _get_keras()
 
+    log.info("Loading LSTM model for %s from disk...", ticker)
     model = keras.models.load_model(model_path, compile=False)
     model.compile(optimizer="adam", loss="huber", metrics=["mae"])
 
@@ -49,6 +74,8 @@ def _load_artifacts(ticker: str):
         with open(metrics_path) as f:
             metrics = json.load(f)
 
+    _model_cache[ticker] = (model, scaler, metrics)
+    log.info("LSTM model for %s cached in memory.", ticker)
     return model, scaler, metrics
 
 

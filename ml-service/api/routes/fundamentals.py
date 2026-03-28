@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -53,7 +54,8 @@ async def get_fundamentals(ticker: str):
         return cached
 
     try:
-        data = fetch_fundamentals(ticker)
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, fetch_fundamentals, ticker)
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Could not fetch fundamentals for {ticker}: {str(e)}")
 

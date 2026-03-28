@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException, Query
 from services.yfinance_service import fetch_ohlcv
 from core.cache import cache_get, cache_set
@@ -19,7 +20,8 @@ async def get_history(
         return cached
 
     try:
-        df = fetch_ohlcv(ticker, period=range)
+        loop = asyncio.get_event_loop()
+        df = await loop.run_in_executor(None, fetch_ohlcv, ticker, range)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
