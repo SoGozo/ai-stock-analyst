@@ -14,7 +14,8 @@
       "Bash(npm run:*)",
       "Bash(./venv/bin/uvicorn main:app --reload --port 8000)",
       "Bash(/Users/souravgoyal/Desktop/Projects/fintech/ml-service/venv/bin/pip install:*)",
-      "Bash(curl -s http://localhost:8000/health)"
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s -w \"\\\\nHTTP_STATUS: %{http_code}\" -H \"Origin: https://frontend-chi-seven-94.vercel.app\" https://ai-stock-analyst-awcs.onrender.com/api/ml/history/AAPL?range=1y)"
     ]
   }
 }
