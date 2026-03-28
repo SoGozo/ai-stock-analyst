@@ -10,7 +10,7 @@ router = APIRouter(prefix="/history", tags=["history"])
 @router.get("/{ticker}")
 async def get_history(
     ticker: str,
-    range: str = Query(default="1y", regex="^(1m|3m|6m|1y|2y|5y)$"),
+    range: str = Query(default="1y", pattern="^(5d|1m|3m|6m|1y|2y|5y)$"),
 ):
     ticker = ticker.upper()
     cache_key = f"history:{ticker}:{range}"

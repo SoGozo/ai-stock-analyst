@@ -10,7 +10,7 @@ import pandas as pd
 from typing import Optional
 
 
-_PERIOD_MAP = {"2y": "2y", "1y": "1y", "6m": "6mo", "3m": "3mo", "1m": "1mo", "5y": "5y", "max": "max"}
+_PERIOD_MAP = {"5d": "5d", "2y": "2y", "1y": "1y", "6m": "6mo", "3m": "3mo", "1m": "1mo", "5y": "5y", "max": "max"}
 
 # ── In-memory cache ─────────────────────────────────────────────────────────
 _ohlcv_cache: dict[str, tuple[float, pd.DataFrame]] = {}   # key → (expiry, df)
